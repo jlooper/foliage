@@ -1,9 +1,10 @@
 import { defineConfig } from 'astro/config';
-import node from '@astrojs/node';
+import netlify from '@astrojs/netlify';
 
-// Use Node server output so upload credentials stay on the server.
+// Use server output so upload credentials stay on the server.
 export default defineConfig({
-  site: 'https://jlooper.github.io',
-  base: '/foliage/',
+  output: 'server',
+  adapter: netlify(),
+  site: 'https://local-leaf.netlify.app',
 });
 
