@@ -4,7 +4,6 @@ import { TARGETS } from '../lib/rubric.mjs';
 import { Image } from 'astro:assets';
 import landscapeImage from '../assets/wc.jpeg';
 
-export const prerender = false;
 
 type ColorKey = keyof typeof TARGETS;
 const targetKeys = Object.keys(TARGETS) as ColorKey[];

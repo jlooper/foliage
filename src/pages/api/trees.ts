@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getFoliageGallery } from '../../lib/foliage';
 
-export const prerender = false;
 
 export const GET: APIRoute = async () => {
   try {

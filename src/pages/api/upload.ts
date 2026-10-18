@@ -2,7 +2,6 @@ import type { APIRoute } from 'astro';
 import { cloudinary } from '../../lib/cloudinary';
 import { GALLERY_TAG } from '../../lib/foliage';
 
-export const prerender = false;
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
