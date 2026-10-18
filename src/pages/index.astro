@@ -1,0 +1,456 @@
+---
+import { getFoliageGallery } from '../lib/foliage';
+import { TARGETS } from '../lib/rubric.mjs';
+import { Image } from 'astro:assets';
+import landscapeImage from '../assets/wc.jpeg';
+
+export const prerender = false;
+
+type ColorKey = keyof typeof TARGETS;
+const targetKeys = Object.keys(TARGETS) as ColorKey[];
+const requestedColor = Astro.url.searchParams.get('color');
+const initialColor: ColorKey = targetKeys.includes(requestedColor as ColorKey) ? requestedColor as ColorKey : 'orange';
+const submissionReceived = Astro.url.searchParams.get('submitted') === 'review';
+let trees = [];
+let galleryUnavailable = false;
+
+try {
+  trees = await getFoliageGallery();
+} catch {
+  galleryUnavailable = true;
+}
+
+trees = [...trees].sort((left, right) => (right.scores[initialColor]?.score ?? -1) - (left.scores[initialColor]?.score ?? -1));
+const target = TARGETS[initialColor];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f2f3e9" />
+    <meta name="description" content="Find and share remarkable trees in your neighborhood." />
+    <title>Local Leaf | Trees around the corner</title>
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="topbar">
+        <a class="wordmark" href="/" aria-label="Local Leaf home"><span class="wordmark-mark" aria-hidden="true">L</span>Local Leaf</a>
+        <nav aria-label="Main navigation">
+          <a class="nav-link active" href="#gallery">Explore</a>
+          <a class="nav-link" href="#contribute">Add a tree</a>
+        </nav>
+        <span class="season-label"><span aria-hidden="true" class="season-dot"></span>Neighborhood field notes</span>
+      </header>
+
+      <main>
+        {submissionReceived && (
+          <p class="submission-notice" role="status">Thanks for sharing your tree. It’s awaiting review and will appear in the public gallery after approval.</p>
+        )}
+        <section class="split-intro" aria-labelledby="page-title">
+          <div class="story-panel">
+            <p class="eyebrow">A living neighborhood atlas</p>
+            <h1 id="page-title">Local Leaf</h1>
+            <p class="story-deck">Fall foliage near you.</p>
+            <p class="intro">Share your neighborhood's most beautiful Fall colors. A field guide made together, one neighborhood at a time.</p>
+            <div class="story-actions">
+              <a class="primary-link" href="#gallery">Explore the collection <span aria-hidden="true">↓</span></a>
+              <span class="edition-mark"><span></span>Autumn field notes</span>
+            </div>
+            <figure class="opening-image">
+              <Image src={landscapeImage} alt="Wellesley College foliage" />
+              <figcaption>Wellesley College, Massachusetts.</figcaption>
+            </figure>
+          </div>
+
+          <aside class="contribute" id="contribute" aria-labelledby="contribute-title">
+            <div class="contribute-heading">
+              <p class="eyebrow">Contribute to the neighborhood</p>
+              <h2 id="contribute-title">Know a tree<br />worth finding?</h2>
+              <p>Leave a small field note. We’ll take care of the color reading.</p>
+            </div>
+
+            <form id="upload-form" enctype="multipart/form-data">
+              <label class="field-label" for="photo">Tree photo <span>Required</span></label>
+              <input class="file-input" id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif" required />
+              <p class="field-hint">JPEG, PNG, WebP, or AVIF. Maximum 10 MB.</p>
+
+              <label class="field-label" for="tree-type">Tree type <span>Required</span></label>
+              <input class="text-input" id="tree-type" name="treeType" type="text" maxlength="80" placeholder="e.g. Japanese maple" autocomplete="off" required />
+
+              <label class="field-label" for="neighborhood">Neighborhood <span>Required</span></label>
+              <input class="text-input" id="neighborhood" name="neighborhood" type="text" maxlength="80" placeholder="e.g. Capitol Hill" autocomplete="address-level3" required />
+              <p class="privacy-note"><span aria-hidden="true">⌖</span> Neighborhood only. No exact location is collected.</p>
+
+              <button class="submit-button" id="submit-button" type="submit">Add to the field notes <span aria-hidden="true">↗</span></button>
+              <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
+            </form>
+
+            <div class="contribute-footnote">
+              <span class="leaf-mark" aria-hidden="true">✳</span>
+              <p>Every contribution is reviewed before joining the public collection.</p>
+            </div>
+          </aside>
+        </section>
+
+        <div class="workbench" id="gallery">
+          <section class="collection" aria-labelledby="collection-title">
+            <div class="collection-heading">
+              <div>
+                <p class="eyebrow">The neighborhood canopy</p>
+                <h2 id="collection-title">Color, ranked</h2>
+              </div>
+              <p class="collection-count"><strong>{trees.length}</strong> {trees.length === 1 ? 'tree' : 'trees'} shared</p>
+            </div>
+
+            <div class="target-tabs" role="group" aria-label="Rank trees by target color">
+              {targetKeys.map((key) => (
+                <button
+                  class:list={['target-tab', { selected: initialColor === key }]}
+                  type="button"
+                  data-target={key}
+                  aria-pressed={initialColor === key ? 'true' : 'false'}
+                >
+                  <span class="target-swatch" style={`--swatch: ${TARGETS[key].hex}`} aria-hidden="true"></span>
+                  <span>{TARGETS[key].label}</span>
+                  <span class="target-hex">{TARGETS[key].hex}</span>
+                </button>
+              ))}
+            </div>
+
+            <div class="score-note">
+              <span class="score-note-mark" aria-hidden="true">i</span>
+              <p>Ranked by the closest hue Cloudinary detects in the photo to <strong>{target.hex}</strong>. Darker shades can still rank close; near-gray tones get a low-confidence adjustment.</p>
+              <details class="method-details">
+                <summary>Scoring method</summary>
+                <p>Cloudinary returns a palette of detected image colors. We compare each tone’s CIELAB hue angle to the selected target hue and score the closest match from 0–100. Lightness does not reduce the hue score. Very low-chroma colors receive a confidence adjustment because their hue is unreliable. Palette share is shown for context, but does not affect ranking.</p>
+              </details>
+            </div>
+
+            {galleryUnavailable ? (
+              <div class="notice-state" role="alert">
+                <h3>The collection is taking a breather.</h3>
+                <p>We couldn’t reach the gallery just now. Try again in a moment.</p>
+                <a class="outline-button" href="/">Reload collection</a>
+              </div>
+            ) : trees.length === 0 ? (
+              <div class="empty-state">
+                <div class="empty-image">
+                  <Image src={landscapeImage} alt="Wellesley College foliage" />
+                  <span class="image-index" aria-hidden="true">01 / 01</span>
+                </div>
+                <div class="empty-copy">
+                  <p class="eyebrow">The first page is still blank</p>
+                  <h3>Know a tree that stops you mid-step?</h3>
+                  <p>Add the first one. We’ll read its colors, place it on the right leaderboard, and show its neighborhood without revealing an exact address.</p>
+                  <a class="text-link" href="#contribute">Share the first tree <span aria-hidden="true">↗</span></a>
+                </div>
+              </div>
+            ) : (
+              <div class="tree-grid" id="tree-grid" aria-live="polite">
+                {trees.map((tree, index) => {
+                  const score = tree.scores[initialColor];
+                  const closest = score?.closestColor && /^#[\da-f]{6}$/i.test(score.closestColor) ? score.closestColor : '#d5d8c4';
+                  return (
+                    <article
+                      class="tree-entry"
+                      data-entry
+                      data-orange={tree.scores.orange?.score ?? -1}
+                      data-red={tree.scores.red?.score ?? -1}
+                      data-yellow={tree.scores.yellow?.score ?? -1}
+                    >
+                      <div class="tree-photo-wrap">
+                        <img class="tree-photo" src={tree.imageUrl} alt={`${tree.treeType} in ${tree.neighborhood}`} loading={index < 6 ? 'eager' : 'lazy'} />
+                        <span class="tree-rank">#{index + 1}</span>
+                      </div>
+                      <div class="tree-meta">
+                        <div class="tree-title-row">
+                          <h3>{tree.treeType}</h3>
+                          <span class="tree-score">{score ? `${score.score} pts` : 'Unranked'}</span>
+                        </div>
+                        <p class="tree-location">{tree.neighborhood}</p>
+                        <div class="palette-line">
+                          <span class="palette-swatch" style={`--swatch: ${closest}`} aria-hidden="true"></span>
+                          <span>{closest} <span class="palette-label">closest tone · {score ? `${score.closestShare}% of palette` : 'no palette match'}</span></span>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+        </div>
+      </main>
+
+      <footer class="footer">
+        <a class="wordmark small" href="/" aria-label="Local Leaf home"><span class="wordmark-mark" aria-hidden="true">L</span>Local Leaf</a>
+        <p>Made for looking up, by Jen Looper.</p>
+        <a href="#page-title">Back to top ↑</a>
+      </footer>
+    </div>
+
+    <script>
+      const targetButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-target]')];
+      const treeGrid = document.getElementById('tree-grid');
+      const scoreNote = document.querySelector('.score-note > p');
+      const form = document.getElementById('upload-form') as HTMLFormElement | null;
+      const submitButton = document.getElementById('submit-button') as HTMLButtonElement | null;
+      const status = document.getElementById('form-status') as HTMLParagraphElement | null;
+      const photoInput = document.getElementById('photo') as HTMLInputElement | null;
+
+      // Keep leaderboard order and score explanations synchronized when a target changes.
+      for (const button of targetButtons) {
+        button.addEventListener('click', () => {
+          const key = button.dataset.target ?? 'orange';
+          for (const tab of targetButtons) {
+            const selected = tab === button;
+            tab.classList.toggle('selected', selected);
+            tab.setAttribute('aria-pressed', String(selected));
+          }
+          if (scoreNote) {
+            const hex = button.querySelector('.target-hex')?.textContent;
+            scoreNote.innerHTML = `Ranked by the closest hue Cloudinary detects in the photo to <strong>${hex}</strong>. Darker shades can still rank close; near-gray tones get a low-confidence adjustment.`;
+          }
+          if (treeGrid) {
+            const entries = [...treeGrid.querySelectorAll<HTMLElement>('[data-entry]')];
+            entries.sort((left, right) => Number(right.dataset[key]) - Number(left.dataset[key]));
+            entries.forEach((entry, index) => {
+              treeGrid.append(entry);
+              const rank = entry.querySelector<HTMLElement>('.tree-rank');
+              const score = entry.querySelector<HTMLElement>('.tree-score');
+              if (rank) rank.textContent = `#${index + 1}`;
+              const value = Number(entry.dataset[key]);
+              if (score) score.textContent = value >= 0 ? `${value} pts` : 'Unranked';
+            });
+          }
+        });
+      }
+
+      // Validate uploads again in the browser and send the image directly to the server endpoint.
+      photoInput?.addEventListener('change', () => {
+        if (!photoInput || !status) return;
+        const file = photoInput.files?.[0];
+        if (file && file.size > 10 * 1024 * 1024) {
+          status.textContent = 'That image is over 10 MB. Choose a smaller file.';
+          photoInput.value = '';
+        } else {
+          status.textContent = file ? `${file.name} ready to share.` : '';
+        }
+      });
+
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!form || !submitButton || !status) return;
+        if (!form.reportValidity()) return;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Sharing your tree…';
+        status.textContent = 'Uploading and reading the photo palette.';
+
+        try {
+          const response = await fetch('/api/upload', { method: 'POST', body: new FormData(form) });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'The photo could not be uploaded.');
+          status.textContent = 'Your photo is awaiting moderator review.';
+          window.location.assign('/?submitted=review#gallery');
+        } catch (error) {
+          status.textContent = error instanceof Error ? error.message : 'The photo could not be uploaded. Please try again.';
+          submitButton.disabled = false;
+          submitButton.innerHTML = 'Share this tree <span aria-hidden="true">↗</span>';
+        }
+      });
+    </script>
+  </body>
+</html>
+
+<style>
+  :root {
+    color-scheme: light;
+    --ink: oklch(25% 0.035 145);
+    --muted: oklch(47% 0.03 145);
+    --paper: oklch(96% 0.018 105);
+    --surface: oklch(99% 0.008 100);
+    --line: oklch(85% 0.023 135);
+    --green: oklch(31% 0.075 148);
+    --green-mid: oklch(39% 0.085 148);
+    --green-light: oklch(91% 0.035 135);
+    --green-panel: oklch(27% 0.065 148);
+    --panel-text: oklch(96% 0.022 100);
+    --panel-muted: oklch(83% 0.035 130);
+    --orange: oklch(66% 0.16 45);
+    --red: oklch(57% 0.18 29);
+    --yellow: oklch(83% 0.14 91);
+    --shadow: 0 15px 45px oklch(30% 0.04 145 / 0.08);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; min-width: 320px; background: var(--paper); }
+  a { color: inherit; }
+  button, input { font: inherit; }
+  button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+  .site-shell { width: min(1440px, calc(100% - 72px)); margin: 0 auto; }
+  .submission-notice { margin: 16px 0 -28px; padding: 12px 15px; color: var(--green); background: var(--green-light); font-size: 13px; line-height: 1.5; }
+
+  .topbar { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--line); }
+  .wordmark { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font-size: 18px; font-weight: 750; letter-spacing: 0; }
+  .wordmark-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--surface); background: var(--green); font-family: Georgia, serif; font-size: 16px; font-weight: 500; }
+  .topbar nav { display: flex; align-items: center; gap: 28px; height: 74px; }
+  .nav-link { height: 100%; display: inline-flex; align-items: center; text-decoration: none; color: var(--muted); font-size: 13px; border-bottom: 2px solid transparent; }
+  .nav-link.active { color: var(--green); border-color: var(--green); font-weight: 650; }
+  .season-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .season-dot { width: 9px; aspect-ratio: 1; border-radius: 50%; background: var(--orange); }
+
+  .split-intro { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(350px, 0.88fr); align-items: stretch; gap: clamp(28px, 4vw, 58px); padding: 46px 0 56px; }
+  .story-panel { min-width: 0; display: flex; flex-direction: column; align-items: start; }
+  .eyebrow { margin: 0 0 13px; color: var(--green-mid); text-transform: uppercase; font-size: 10px; line-height: 1.4; font-weight: 750; letter-spacing: 0.09em; }
+  h1, h2, h3, p, figure { margin-top: 0; }
+  h1 { max-width: 650px; margin-bottom: 4px; color: var(--green-panel); font-family: Georgia, "Times New Roman", serif; font-size: 48px; line-height: 1; font-weight: 500; }
+  .story-deck { margin: 0 0 16px; color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: clamp(27px, 3vw, 40px); line-height: 1.12; }
+  .intro { max-width: 54ch; margin-bottom: 19px; color: var(--muted); font-size: 15px; line-height: 1.65; }
+  .story-actions { display: flex; align-items: center; gap: 24px; margin-bottom: 23px; }
+  .primary-link { min-height: 46px; display: inline-flex; align-items: center; gap: 24px; padding: 0 17px; border-radius: 9px; color: var(--panel-text); background: var(--green-panel); text-decoration: none; font-size: 13px; font-weight: 700; }
+  .primary-link span { font-size: 18px; }
+  .edition-mark { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+  .edition-mark span { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+  .text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--green); text-decoration-thickness: 1px; text-underline-offset: 4px; font-size: 13px; font-weight: 680; }
+  .text-link span { font-size: 17px; transition: transform 180ms ease-out; }
+  .text-link:hover span { transform: translateY(2px); }
+  .opening-image { position: relative; width: 100%; margin: auto 0 0; height: 400px; }
+  .opening-image img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 60%; }
+  .opening-image figcaption { position: absolute; right: 10px; bottom: 10px; padding: 7px 10px; color: var(--ink); background: var(--surface); font-size: 11px; }
+
+  .workbench { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 42px; padding: 32px 0 72px; border-top: 1px solid var(--line); }
+  .collection { min-width: 0; }
+  .collection-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+  .collection-heading .eyebrow { margin-bottom: 7px; }
+  h2 { margin-bottom: 0; font-family: Georgia, "Times New Roman", serif; font-size: 31px; line-height: 1.08; font-weight: 500; }
+  .collection-count { margin: 0 0 4px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .collection-count strong { color: var(--ink); font-size: 15px; }
+  .target-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); background: var(--surface); }
+  .target-tab { min-width: 0; min-height: 52px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 8px 12px; color: var(--muted); border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 13px; font-weight: 620; transition: background 160ms ease-out, color 160ms ease-out; }
+  .target-tab:last-child { border-right: 0; }
+  .target-tab:hover { color: var(--ink); background: var(--green-light); }
+  .target-tab.selected { color: var(--ink); background: var(--green-light); box-shadow: inset 0 -3px var(--green); }
+  .target-swatch, .palette-swatch { flex: 0 0 auto; width: 15px; aspect-ratio: 1; border-radius: 50%; background: var(--swatch); border: 1px solid oklch(20% 0.02 140 / 0.18); }
+  .target-hex { color: var(--muted); font-size: 10px; font-weight: 500; }
+  .score-note { display: flex; align-items: start; gap: 10px; padding: 14px 0 18px; }
+  .score-note-mark { width: 17px; height: 17px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); font-family: Georgia, serif; font-size: 11px; }
+  .score-note > p { flex: 1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+  .score-note strong { color: var(--ink); }
+  .method-details { flex: 0 0 auto; position: relative; color: var(--green); font-size: 11px; }
+  .method-details summary { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .method-details > p { position: absolute; z-index: 3; top: 22px; right: 0; width: min(330px, 78vw); margin: 0; padding: 13px 15px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); color: var(--muted); line-height: 1.6; }
+
+  .tree-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .tree-entry { min-width: 0; background: var(--surface); }
+  .tree-photo-wrap { position: relative; aspect-ratio: 0.86; overflow: hidden; background: var(--green-light); }
+  .tree-photo { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform 260ms ease-out; }
+  .tree-entry:hover .tree-photo { transform: scale(1.025); }
+  .tree-rank { position: absolute; top: 10px; left: 10px; min-width: 30px; height: 28px; display: grid; place-items: center; padding: 0 7px; background: var(--surface); font-size: 11px; font-weight: 700; }
+  .tree-meta { padding: 12px 12px 14px; }
+  .tree-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .tree-title-row h3 { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4; }
+  .tree-score { color: var(--green); font-size: 12px; font-weight: 750; white-space: nowrap; }
+  .tree-location { margin: 4px 0 11px; color: var(--muted); font-size: 11px; }
+  .palette-line { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 10px; }
+  .palette-swatch { width: 12px; }
+  .palette-label { color: var(--muted); }
+
+  .empty-state { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr); align-items: center; gap: 24px; padding-top: 3px; }
+  .empty-image { position: relative; height: 290px; }
+  .empty-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .image-index { position: absolute; bottom: 10px; left: 10px; padding: 6px 8px; color: var(--ink); background: var(--surface); font: 10px/1 ui-monospace, monospace; }
+  .empty-copy { padding: 12px 5px; }
+  .empty-copy h3 { max-width: 15ch; margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 25px; line-height: 1.12; font-weight: 500; }
+  .empty-copy > p:not(.eyebrow) { margin-bottom: 16px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+  .notice-state { padding: 34px 24px; background: var(--green-light); }
+  .notice-state h3 { margin-bottom: 7px; font-family: Georgia, serif; font-weight: 500; font-size: 23px; }
+  .notice-state p { color: var(--muted); font-size: 13px; }
+  .outline-button { min-height: 40px; display: inline-flex; align-items: center; padding: 0 15px; border: 1px solid var(--green); color: var(--green); text-decoration: none; font-size: 12px; font-weight: 650; }
+
+  .contribute { min-width: 0; padding: 29px 30px 24px; border: 1px solid oklch(42% 0.055 148); border-radius: 15px; color: var(--panel-text); background: var(--green-panel); box-shadow: var(--shadow); }
+  .contribute .eyebrow { color: oklch(82% 0.12 85); }
+  .contribute-heading { padding-bottom: 16px; border-bottom: 1px solid oklch(56% 0.045 148 / 0.55); }
+  .contribute-heading .eyebrow { margin-bottom: 7px; }
+  .contribute-heading h2 { color: var(--panel-text); font-size: 32px; line-height: 1.1; }
+  .contribute-heading > p:last-child { margin: 8px 0 0; color: var(--panel-muted); font-size: 13px; line-height: 1.55; }
+  #upload-form { padding-top: 16px; }
+  .field-label { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 7px; color: var(--panel-text); font-size: 12px; font-weight: 650; }
+  .field-label > span { color: var(--panel-muted); font-size: 11px; font-weight: 450; }
+  .file-input, .text-input { width: 100%; min-height: 48px; color: var(--ink); border: 1px solid oklch(83% 0.026 130); border-radius: 9px; background: oklch(98% 0.012 100); font-size: 13px; }
+  .file-input { padding: 7px 9px; }
+  .file-input::file-selector-button { min-height: 32px; margin-right: 10px; padding: 0 12px; border: 0; border-radius: 6px; color: var(--green); background: var(--green-light); font-size: 11px; font-weight: 650; cursor: pointer; }
+  .text-input { padding: 0 13px; }
+  .text-input::placeholder { color: oklch(47% 0.025 145); }
+  .field-hint { margin: 6px 0 16px; color: var(--panel-muted); font-size: 11px; line-height: 1.5; }
+  .text-input + .field-label { margin-top: 16px; }
+  .privacy-note { display: flex; align-items: start; gap: 7px; margin: 8px 0 16px; color: var(--panel-muted); font-size: 11px; line-height: 1.5; }
+  .privacy-note span { color: oklch(82% 0.12 85); font-size: 14px; line-height: 1; }
+  .submit-button { width: 100%; min-height: 49px; display: flex; justify-content: space-between; align-items: center; padding: 0 16px; border: 0; border-radius: 9px; color: var(--green-panel); background: oklch(85% 0.13 88); cursor: pointer; font-size: 13px; font-weight: 750; transition: background 160ms ease-out, transform 160ms ease-out; }
+  .submit-button:hover:not(:disabled) { background: oklch(89% 0.12 88); transform: translateY(-1px); }
+  .submit-button:disabled { opacity: 0.72; cursor: progress; }
+  .submit-button span { font-size: 17px; }
+  .form-status { min-height: 20px; margin: 8px 0 0; color: var(--panel-muted); font-size: 11px; line-height: 1.5; }
+  .contribute-footnote { display: flex; align-items: start; gap: 8px; margin-top: 12px; padding-top: 13px; border-top: 1px solid oklch(56% 0.045 148 / 0.55); }
+  .leaf-mark { color: oklch(82% 0.12 85); }
+  .contribute-footnote p { margin: 0; color: var(--panel-muted); font-size: 11px; line-height: 1.5; }
+
+  .footer { min-height: 73px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); color: var(--muted); }
+  .footer p, .footer > a:last-child { margin: 0; font-size: 11px; }
+  .footer > a:last-child { color: var(--green); text-underline-offset: 3px; }
+  .wordmark.small { font-size: 14px; }
+  .wordmark.small .wordmark-mark { width: 23px; height: 23px; font-size: 13px; }
+
+  @media (max-width: 1050px) {
+    .site-shell { width: min(100% - 48px, 960px); }
+    .split-intro { grid-template-columns: minmax(0, 1fr) minmax(330px, 0.9fr); gap: 26px; }
+    .contribute { padding: 24px 22px 20px; }
+    .tree-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 760px) {
+    .site-shell { width: min(100% - 32px, 620px); }
+    .topbar { min-height: 62px; }
+    .topbar nav { height: 62px; gap: 16px; }
+    .season-label { display: none; }
+    .split-intro { grid-template-columns: 1fr; gap: 26px; padding: 32px 0 34px; }
+    h1 { font-size: 42px; }
+    .story-deck { font-size: 34px; }
+    .opening-image { height: 220px; }
+    .workbench { grid-template-columns: 1fr; gap: 28px; padding-top: 26px; }
+    .empty-state { grid-template-columns: 1fr; gap: 5px; }
+    .empty-image { height: 240px; }
+    .empty-copy { padding: 12px 0 0; }
+    .empty-copy h3 { max-width: 22ch; }
+  }
+  @media (max-width: 480px) {
+    .site-shell { width: min(100% - 24px, 420px); }
+    .topbar nav { gap: 12px; }
+    .nav-link { font-size: 11px; }
+    .wordmark { font-size: 16px; }
+    h1 { font-size: 38px; }
+    .story-deck { font-size: 29px; }
+    .story-actions { flex-wrap: wrap; gap: 9px 18px; }
+    .contribute { padding: 23px 18px 19px; }
+    .collection-heading { align-items: start; flex-direction: column; gap: 7px; }
+    .target-tab { min-height: 49px; flex-wrap: wrap; gap: 4px 7px; font-size: 11px; }
+    .target-hex { width: 100%; padding-left: 23px; text-align: left; font-size: 9px; }
+    .score-note { flex-wrap: wrap; }
+    .method-details { margin-left: 27px; }
+    .tree-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tree-meta { padding: 9px 8px 11px; }
+    .tree-title-row { align-items: start; flex-direction: column; gap: 3px; }
+    .tree-title-row h3 { max-width: 100%; }
+    .tree-location { margin-bottom: 8px; }
+    .palette-label { display: none; }
+    .footer { flex-wrap: wrap; padding: 13px 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+  }
+</style>

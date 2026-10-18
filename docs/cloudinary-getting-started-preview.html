@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Cloudinary delivery check | Local Leaf</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #27352c;
+        --muted: #647267;
+        --paper: #f4f2e9;
+        --leaf: #e0e7d6;
+        --line: #cbd2c5;
+        --accent: #b74528;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+      }
+      main { width: min(1100px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 64px; }
+      header { display: flex; align-items: end; justify-content: space-between; gap: 20px; padding: 0 0 22px; border-bottom: 1px solid var(--line); }
+      h1 { margin: 0; font-size: clamp(28px, 5vw, 52px); font-weight: 500; line-height: 1; }
+      header p { margin: 0; color: var(--muted); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      .images { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 28px 0; }
+      figure { margin: 0; min-width: 0; }
+      .image-frame { overflow: hidden; background: var(--leaf); aspect-ratio: 1 / 1; }
+      .image-frame img { display: block; width: 100%; height: 100%; object-fit: cover; }
+      figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-top: 11px; font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; }
+      figcaption span:last-child { color: var(--muted); text-align: right; }
+      .summary { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; padding: 16px 0; border-block: 1px solid var(--line); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      .summary strong { color: var(--accent); font-size: 20px; }
+      .summary p { margin: 0; color: var(--muted); }
+      #stage-5-integration-snippet { margin-top: 34px; padding: 22px; background: var(--leaf); }
+      #stage-5-integration-snippet h2 { margin: 0 0 12px; font-size: 22px; font-weight: 500; }
+      #stage-5-integration-snippet p { margin: 0 0 12px; color: var(--muted); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      pre { overflow-x: auto; margin: 0; padding: 16px; color: #edf0e8; background: #27352c; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      @media (max-width: 680px) {
+        main { width: min(100% - 28px, 520px); padding-top: 24px; }
+        header { display: block; }
+        header p { margin-top: 10px; }
+        .images { grid-template-columns: 1fr; gap: 22px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Image delivery check</h1>
+        <p>Original and transformed Cloudinary sample</p>
+      </header>
+
+      <!-- The paired figures make the source and optimized result directly comparable. -->
+      <section class="images" aria-label="Original and transformed image comparison">
+        <figure>
+          <div class="image-frame"><img id="original-image" src="https://res.cloudinary.com/jen-demos/image/upload/samples/coffee" alt="Cloudinary coffee sample, original image" /></div>
+          <figcaption><span>Original</span><span id="original-stats">Measuring image…</span></figcaption>
+        </figure>
+        <figure>
+          <div class="image-frame"><img id="transformed-image" src="https://res.cloudinary.com/jen-demos/image/upload/b_gen_fill,c_pad,w_1000,h_1000,y_-100/l_text:Arial_72_bold:Adapt%20everywhere,co_white/e_shadow:50/fl_layer_apply,g_south_west,x_80,y_140/l_text:Arial_34:Dynamic%20media%20built%20in%20real%20time,co_rgb:f5f5f5/e_shadow:35/fl_layer_apply,g_south_west,x_84,y_90/f_auto,q_auto/samples/coffee" alt="Cloudinary coffee sample, transformed to 1000 by 1000 with text overlays" /></div>
+          <figcaption><span>Transformed</span><span id="transformed-stats">Measuring image…</span></figcaption>
+        </figure>
+      </section>
+
+      <!-- Runtime fetches use a browser-like Accept header so f_auto can negotiate an efficient format. -->
+      <section class="summary" aria-live="polite">
+        <strong id="savings">Measuring…</strong>
+        <p id="savings-detail">Comparing delivered byte sizes.</p>
+      </section>
+
+      <!-- These stats use fetch for actual response bytes and createImageBitmap for decoded dimensions. -->
+      <script type="module">
+        const accept = 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8';
+        const entries = [
+          { id: 'original-image', stats: 'original-stats', url: 'https://res.cloudinary.com/jen-demos/image/upload/samples/coffee' },
+          { id: 'transformed-image', stats: 'transformed-stats', url: 'https://res.cloudinary.com/jen-demos/image/upload/b_gen_fill,c_pad,w_1000,h_1000,y_-100/l_text:Arial_72_bold:Adapt%20everywhere,co_white/e_shadow:50/fl_layer_apply,g_south_west,x_80,y_140/l_text:Arial_34:Dynamic%20media%20built%20in%20real%20time,co_rgb:f5f5f5/e_shadow:35/fl_layer_apply,g_south_west,x_84,y_90/f_auto,q_auto/samples/coffee' },
+        ];
+
+        // Fetch each URL for the delivered size and decode dimensions when CORS permits browser access.
+        const measurements = await Promise.all(entries.map(async (entry) => {
+          const image = document.getElementById(entry.id);
+          const label = document.getElementById(entry.stats);
+          try {
+            const response = await fetch(entry.url, { mode: 'cors', headers: { Accept: accept } });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const blob = await response.blob();
+            const bitmap = await createImageBitmap(blob);
+            const details = { bytes: blob.size, width: bitmap.width, height: bitmap.height, type: response.headers.get('content-type') };
+            label.textContent = `${details.width} × ${details.height} · ${(details.bytes / 1024).toFixed(1)} KB · ${details.type}`;
+            bitmap.close();
+            return details;
+          } catch {
+            label.textContent = image.complete ? `${image.naturalWidth} × ${image.naturalHeight} · live byte stats unavailable` : 'Image could not be loaded';
+            return null;
+          }
+        }));
+
+        // Savings are calculated from fetched blobs; no values are inferred when a browser blocks measurement.
+        const [original, transformed] = measurements;
+        if (original && transformed) {
+          const percent = Math.max(0, (1 - transformed.bytes / original.bytes) * 100);
+          document.getElementById('savings').textContent = `${percent.toFixed(1)}% smaller`;
+          document.getElementById('savings-detail').textContent = `${(original.bytes - transformed.bytes).toLocaleString()} bytes saved across the delivered images.`;
+        } else {
+          document.getElementById('savings').textContent = 'Stats unavailable';
+          document.getElementById('savings-detail').textContent = 'Image delivery can still be viewed above; this browser did not permit both response bodies to be measured.';
+        }
+      </script>
+
+      <!-- Server-side integration generates a delivery URL through the official Cloudinary SDK. -->
+      <section id="stage-5-integration-snippet" aria-labelledby="snippet-title">
+        <h2 id="snippet-title">Astro server integration</h2>
+        <p>Use the SDK on the server to generate the same transformed URL. Keep API credentials out of browser code.</p>
+        <pre><code>import { cloudinary } from '../lib/cloudinary';
+
+const transformation = 'b_gen_fill,c_pad,w_1000,h_1000,y_-100/l_text:Arial_72_bold:Adapt%20everywhere,co_white/e_shadow:50/fl_layer_apply,g_south_west,x_80,y_140/l_text:Arial_34:Dynamic%20media%20built%20in%20real%20time,co_rgb:f5f5f5/e_shadow:35/fl_layer_apply,g_south_west,x_84,y_90/f_auto,q_auto';
+const url = cloudinary.url('samples/coffee', {
+  transformation: [{ raw_transformation: transformation }],
+  force_version: false,
+  urlAnalytics: false,
+  secure: true,
+});</code></pre>
+      </section>
+    </main>
+  </body>
+</html>
