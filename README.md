@@ -13,7 +13,7 @@ Add `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` t
 
 ## Uploads and scoring
 
-The server accepts JPEG, PNG, WebP, and AVIF images up to 10 MB. Contributors enter a tree type and neighborhood name; the app does not request device coordinates. New uploads use the `local-leaf-gallery` tag and `local-leaf` asset folder, are marked for Cloudinary manual moderation, and store the tree type, neighborhood, and a compact palette in contextual metadata. Only assets with approved moderation status appear in the public gallery. Existing approved assets tagged `foliage-gallery` remain visible.
+The server accepts JPEG, PNG, WebP, and AVIF images up to 5 MB (kept under Netlify's ~6 MB synchronous function payload limit). Contributors enter a tree type and neighborhood name; the app does not request device coordinates. New uploads use the `local-leaf-gallery` tag and `local-leaf` asset folder, are marked for Cloudinary manual moderation, and store the tree type, neighborhood, and a compact palette in contextual metadata. Only assets with approved moderation status appear in the public gallery. Existing approved assets tagged `foliage-gallery` remain visible.
 
 Review submissions in the Cloudinary Media Library under **Moderation → Manual**. Approving an asset makes it eligible for the next gallery query; rejected and pending assets stay out of the public rankings. Cloudinary notes that moderated assets may still be directly deliverable by URL by default; contact Cloudinary Support if pending assets must be blocked at the delivery layer.
 

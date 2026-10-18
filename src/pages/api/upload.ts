@@ -3,7 +3,8 @@ import { cloudinary } from '../../lib/cloudinary';
 import { GALLERY_TAG } from '../../lib/foliage';
 
 
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+// Kept under Netlify's ~6 MB synchronous function payload limit, with headroom for multipart overhead.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif']);
 
 function cleanField(value: FormDataEntryValue | null, maxLength: number) {
@@ -42,7 +43,7 @@ export const POST: APIRoute = async ({ request }) => {
     return Response.json({ error: 'Use a JPEG, PNG, WebP, or AVIF image.' }, { status: 415 });
   }
   if (image.size > MAX_IMAGE_BYTES) {
-    return Response.json({ error: 'Choose an image smaller than 10 MB.' }, { status: 413 });
+    return Response.json({ error: 'Choose an image smaller than 5 MB.' }, { status: 413 });
   }
   if (!treeType || !neighborhood) {
     return Response.json({ error: 'Add the tree type and neighborhood to continue.' }, { status: 400 });

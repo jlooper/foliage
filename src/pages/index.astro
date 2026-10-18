@@ -73,7 +73,7 @@ const target = TARGETS[initialColor];
             <form id="upload-form" enctype="multipart/form-data">
               <label class="field-label" for="photo">Tree photo <span>Required</span></label>
               <input class="file-input" id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif" required />
-              <p class="field-hint">JPEG, PNG, WebP, or AVIF. Maximum 10 MB.</p>
+              <p class="field-hint">JPEG, PNG, WebP, or AVIF. Maximum 5 MB.</p>
 
               <label class="field-label" for="tree-type">Tree type <span>Required</span></label>
               <input class="text-input" id="tree-type" name="treeType" type="text" maxlength="80" placeholder="e.g. Japanese maple" autocomplete="off" required />
@@ -232,8 +232,8 @@ const target = TARGETS[initialColor];
       photoInput?.addEventListener('change', () => {
         if (!photoInput || !status) return;
         const file = photoInput.files?.[0];
-        if (file && file.size > 10 * 1024 * 1024) {
-          status.textContent = 'That image is over 10 MB. Choose a smaller file.';
+        if (file && file.size > 5 * 1024 * 1024) {
+          status.textContent = 'That image is over 5 MB. Choose a smaller file.';
           photoInput.value = '';
         } else {
           status.textContent = file ? `${file.name} ready to share.` : '';
@@ -250,8 +250,13 @@ const target = TARGETS[initialColor];
 
         try {
           const response = await fetch('/api/upload', { method: 'POST', body: new FormData(form) });
-          const result = await response.json();
-          if (!response.ok) throw new Error(result.error || 'The photo could not be uploaded.');
+          let result: { error?: string } = {};
+          try {
+            result = await response.json();
+          } catch {
+            // The server or platform returned a non-JSON (or empty) response, e.g. a size-limit rejection.
+          }
+          if (!response.ok) throw new Error(result.error || 'The photo could not be uploaded. Please try again.');
           status.textContent = 'Your photo is awaiting moderator review.';
           window.location.assign('/?submitted=review#gallery');
         } catch (error) {
