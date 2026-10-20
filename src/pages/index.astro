@@ -1,5 +1,5 @@
 ---
-import { getFoliageGallery } from '../lib/foliage';
+import { getFoliageGallery, GALLERY_TAG } from '../lib/foliage';
 import { TARGETS } from '../lib/rubric.mjs';
 import { Image } from 'astro:assets';
 import landscapeImage from '../assets/wc.jpeg';
@@ -21,6 +21,8 @@ try {
 
 trees = [...trees].sort((left, right) => (right.scores[initialColor]?.score ?? -1) - (left.scores[initialColor]?.score ?? -1));
 const target = TARGETS[initialColor];
+const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME ?? '';
+const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
 ---
 
 <!doctype html>
@@ -31,6 +33,7 @@ const target = TARGETS[initialColor];
     <meta name="theme-color" content="#f2f3e9" />
     <meta name="description" content="Find and share remarkable trees in your neighborhood." />
     <title>Local Leaf | Trees around the corner</title>
+    <script src="https://upload-widget.cloudinary.com/latest/global/all.js" is:inline></script>
   </head>
   <body>
     <div class="site-shell">
@@ -70,19 +73,16 @@ const target = TARGETS[initialColor];
               <p>Leave a small field note. We’ll take care of the color reading.</p>
             </div>
 
-            <form id="upload-form" enctype="multipart/form-data">
-              <label class="field-label" for="photo">Tree photo <span>Required</span></label>
-              <input class="file-input" id="photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp,image/avif" required />
-              <p class="field-hint">JPEG, PNG, WebP, or AVIF. Maximum 5 MB.</p>
-
+            <form id="upload-form">
               <label class="field-label" for="tree-type">Tree type <span>Required</span></label>
               <input class="text-input" id="tree-type" name="treeType" type="text" maxlength="80" placeholder="e.g. Japanese maple" autocomplete="off" required />
 
               <label class="field-label" for="neighborhood">Neighborhood <span>Required</span></label>
               <input class="text-input" id="neighborhood" name="neighborhood" type="text" maxlength="80" placeholder="e.g. Capitol Hill" autocomplete="address-level3" required />
+              <p class="field-hint">You can choose more than one photo at once.</p>
               <p class="privacy-note"><span aria-hidden="true">⌖</span> Neighborhood only. No exact location is collected.</p>
 
-              <button class="submit-button" id="submit-button" type="submit">Add to the field notes <span aria-hidden="true">↗</span></button>
+              <button class="submit-button" id="submit-button" type="submit">Choose photos to add <span aria-hidden="true">↗</span></button>
               <p class="form-status" id="form-status" role="status" aria-live="polite"></p>
             </form>
 
@@ -191,14 +191,15 @@ const target = TARGETS[initialColor];
       </footer>
     </div>
 
-    <script>
-      const targetButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-target]')];
+    <script define:vars={{ cloudName: cloudinaryCloudName, uploadPreset: cloudinaryUploadPreset, galleryTag: GALLERY_TAG }}>
+      const targetButtons = [...document.querySelectorAll('[data-target]')];
       const treeGrid = document.getElementById('tree-grid');
       const scoreNote = document.querySelector('.score-note > p');
-      const form = document.getElementById('upload-form') as HTMLFormElement | null;
-      const submitButton = document.getElementById('submit-button') as HTMLButtonElement | null;
-      const status = document.getElementById('form-status') as HTMLParagraphElement | null;
-      const photoInput = document.getElementById('photo') as HTMLInputElement | null;
+      const form = document.getElementById('upload-form');
+      const submitButton = document.getElementById('submit-button');
+      const status = document.getElementById('form-status');
+      const treeTypeInput = document.getElementById('tree-type');
+      const neighborhoodInput = document.getElementById('neighborhood');
 
       // Keep leaderboard order and score explanations synchronized when a target changes.
       for (const button of targetButtons) {
@@ -214,12 +215,12 @@ const target = TARGETS[initialColor];
             scoreNote.innerHTML = `Ranked by the closest hue Cloudinary detects in the photo to <strong>${hex}</strong>. Darker shades can still rank close; near-gray tones get a low-confidence adjustment.`;
           }
           if (treeGrid) {
-            const entries = [...treeGrid.querySelectorAll<HTMLElement>('[data-entry]')];
+            const entries = [...treeGrid.querySelectorAll('[data-entry]')];
             entries.sort((left, right) => Number(right.dataset[key]) - Number(left.dataset[key]));
             entries.forEach((entry, index) => {
               treeGrid.append(entry);
-              const rank = entry.querySelector<HTMLElement>('.tree-rank');
-              const score = entry.querySelector<HTMLElement>('.tree-score');
+              const rank = entry.querySelector('.tree-rank');
+              const score = entry.querySelector('.tree-score');
               if (rank) rank.textContent = `#${index + 1}`;
               const value = Number(entry.dataset[key]);
               if (score) score.textContent = value >= 0 ? `${value} pts` : 'Unranked';
@@ -228,42 +229,85 @@ const target = TARGETS[initialColor];
         });
       }
 
-      // Validate uploads again in the browser and send the image directly to the server endpoint.
-      photoInput?.addEventListener('change', () => {
-        if (!photoInput || !status) return;
-        const file = photoInput.files?.[0];
-        if (file && file.size > 5 * 1024 * 1024) {
-          status.textContent = 'That image is over 5 MB. Choose a smaller file.';
-          photoInput.value = '';
-        } else {
-          status.textContent = file ? `${file.name} ready to share.` : '';
-        }
-      });
+      const defaultButtonHtml = 'Choose photos to add <span aria-hidden="true">↗</span>';
+      let uploadedCount = 0;
+      let failedCount = 0;
+      let pendingFinalizations = [];
 
-      form?.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (!form || !submitButton || !status) return;
-        if (!form.reportValidity()) return;
-        submitButton.disabled = true;
-        submitButton.textContent = 'Sharing your tree…';
-        status.textContent = 'Uploading and reading the photo palette.';
+      function resetForm() {
+        if (!submitButton) return;
+        submitButton.disabled = false;
+        submitButton.innerHTML = defaultButtonHtml;
+      }
 
+      async function finalizeUpload(publicId, treeType, neighborhood) {
         try {
-          const response = await fetch('/api/upload', { method: 'POST', body: new FormData(form) });
-          let result: { error?: string } = {};
-          try {
-            result = await response.json();
-          } catch {
-            // The server or platform returned a non-JSON (or empty) response, e.g. a size-limit rejection.
-          }
-          if (!response.ok) throw new Error(result.error || 'The photo could not be uploaded. Please try again.');
-          status.textContent = 'Your photo is awaiting moderator review.';
-          window.location.assign('/?submitted=review#gallery');
-        } catch (error) {
-          status.textContent = error instanceof Error ? error.message : 'The photo could not be uploaded. Please try again.';
-          submitButton.disabled = false;
-          submitButton.innerHTML = 'Share this tree <span aria-hidden="true">↗</span>';
+          const response = await fetch('/api/finalize-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ publicId, treeType, neighborhood }),
+          });
+          if (!response.ok) failedCount += 1;
+        } catch {
+          failedCount += 1;
         }
+      }
+
+      function openUploadWidget(treeType, neighborhood) {
+        return window.cloudinary.createUploadWidget(
+          {
+            cloudName,
+            uploadPreset,
+            multiple: true,
+            tags: [galleryTag],
+            context: { tree_type: treeType, neighborhood, location_visibility: 'neighborhood only' },
+          },
+          (error, result) => {
+            if (error || !result) return;
+
+            if (result.event === 'success') {
+              uploadedCount += 1;
+              pendingFinalizations.push(finalizeUpload(result.info.public_id, treeType, neighborhood));
+            } else if (result.event === 'queues-end') {
+              if (!status) return;
+              if (uploadedCount === 0) {
+                resetForm();
+                return;
+              }
+              // Wait for every finalize call to land before navigating away, or the
+              // browser aborts whichever requests are still in flight.
+              Promise.all(pendingFinalizations).then(() => {
+                status.textContent = failedCount > 0
+                  ? `${uploadedCount - failedCount} of ${uploadedCount} photos saved. Some could not be saved — try again.`
+                  : 'Your photos are awaiting moderator review.';
+                window.location.assign('/?submitted=review#gallery');
+              });
+            } else if (result.event === 'close' && uploadedCount === 0) {
+              resetForm();
+              if (status) status.textContent = '';
+            }
+          },
+        );
+      }
+
+      form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        if (!form || !submitButton || !status || !treeTypeInput || !neighborhoodInput) return;
+        if (!form.reportValidity()) return;
+        if (!cloudName || !uploadPreset) {
+          status.textContent = 'Image uploads are not configured yet.';
+          return;
+        }
+
+        uploadedCount = 0;
+        failedCount = 0;
+        pendingFinalizations = [];
+        submitButton.disabled = true;
+        submitButton.textContent = 'Opening photo picker…';
+        status.textContent = '';
+
+        const widget = openUploadWidget(treeTypeInput.value.trim(), neighborhoodInput.value.trim());
+        widget.open();
       });
     </script>
   </body>
@@ -387,10 +431,7 @@ const target = TARGETS[initialColor];
   #upload-form { padding-top: 16px; }
   .field-label { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 7px; color: var(--panel-text); font-size: 12px; font-weight: 650; }
   .field-label > span { color: var(--panel-muted); font-size: 11px; font-weight: 450; }
-  .file-input, .text-input { width: 100%; min-height: 48px; color: var(--ink); border: 1px solid oklch(83% 0.026 130); border-radius: 9px; background: oklch(98% 0.012 100); font-size: 13px; }
-  .file-input { padding: 7px 9px; }
-  .file-input::file-selector-button { min-height: 32px; margin-right: 10px; padding: 0 12px; border: 0; border-radius: 6px; color: var(--green); background: var(--green-light); font-size: 11px; font-weight: 650; cursor: pointer; }
-  .text-input { padding: 0 13px; }
+  .text-input { width: 100%; min-height: 48px; padding: 0 13px; color: var(--ink); border: 1px solid oklch(83% 0.026 130); border-radius: 9px; background: oklch(98% 0.012 100); font-size: 13px; }
   .text-input::placeholder { color: oklch(47% 0.025 145); }
   .field-hint { margin: 6px 0 16px; color: var(--panel-muted); font-size: 11px; line-height: 1.5; }
   .text-input + .field-label { margin-top: 16px; }
