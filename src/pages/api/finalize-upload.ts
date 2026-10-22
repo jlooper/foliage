@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { cloudinary } from '../../lib/cloudinary';
 import { GALLERY_TAG } from '../../lib/foliage';
+import { serializePredominant } from '../../lib/rubric.mjs';
 
 function cleanField(value: unknown, maxLength: number) {
   return typeof value === 'string' ? value.trim().replace(/[<>\u0000-\u001f]/g, '').slice(0, maxLength) : '';
@@ -37,23 +38,21 @@ export const POST: APIRoute = async ({ request }) => {
       return Response.json({ error: 'The photo could not be saved. Please try again.' }, { status: 400 });
     }
 
-    const palette = Array.isArray(details.colors) ? details.colors : [];
-    const compactPalette = palette.slice(0, 8)
-      .filter((entry: unknown) => Array.isArray(entry) && /^#[\da-f]{6}$/i.test(String(entry[0])))
-      .map(([hex, share]: [string, number]) => `${hex}:${Number(share).toFixed(1)}`)
-      .join(',');
+    // Cloudinary's own named-color buckets (red, pink, lightblue, ...) and their share of the photo.
+    const predominant = Array.isArray(details.predominant?.cloudinary) ? details.predominant.cloudinary : [];
+    const compactPredominant = serializePredominant(predominant);
 
     const context: Record<string, string> = {
       tree_type: treeType,
       neighborhood,
       location_visibility: 'neighborhood only',
     };
-    if (compactPalette) context.color_palette = compactPalette;
+    if (compactPredominant) context.predominant = compactPredominant;
 
     await cloudinary.uploader.explicit(publicId, { type: 'upload', context });
 
     return Response.json({
-      tree: { publicId, treeType, neighborhood, palette, moderationStatus: 'pending' },
+      tree: { publicId, treeType, neighborhood, predominant, moderationStatus: 'pending' },
     }, { status: 200 });
   } catch {
     return Response.json({ error: 'The photo could not be saved. Please try again.' }, { status: 502 });

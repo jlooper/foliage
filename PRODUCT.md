@@ -10,7 +10,7 @@ People looking for standout trees in their area and neighbors who want to share 
 
 ## Product Purpose
 
-A crowdsourced neighborhood tree gallery called Local Leaf that helps people discover remarkable local trees and submit their own. It ranks photos by the closest tone in Cloudinary's detected color palette to orange, red, or yellow, with a transparent rubric and approximate public location.
+A crowdsourced neighborhood tree gallery called Local Leaf that helps people discover remarkable local trees and submit their own. It ranks photos by how much of the image Cloudinary's predominant-color analysis labels orange, red, or yellow, with a transparent rubric and approximate public location.
 
 ## Brand Personality
 

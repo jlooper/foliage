@@ -1,5 +1,5 @@
 import { cloudinary } from './cloudinary';
-import { scorePalette, TARGETS } from './rubric.mjs';
+import { parsePredominant, scorePredominant, TARGETS } from './rubric.mjs';
 
 const GALLERY_TAG = 'local-leaf-gallery';
 const LEGACY_GALLERY_TAG = 'foliage-gallery';
@@ -8,16 +8,10 @@ const GALLERY_FOLDERS = ['foliage', 'local-leaf'];
 
 function mapResource(resource: any) {
   const context = resource.context?.custom ?? resource.context ?? {};
-  const palette = typeof context.color_palette === 'string'
-    ? context.color_palette.split(',').flatMap((entry: string) => {
-      const [hex, share] = entry.split(':');
-      const numericShare = Number(share);
-      return /^#[\da-f]{6}$/i.test(hex ?? '') && Number.isFinite(numericShare) ? [[hex, numericShare]] : [];
-    })
-    : [];
-  const scores = Object.fromEntries(Object.entries(TARGETS).map(([key, target]) => [
+  const predominant = parsePredominant(context.predominant);
+  const scores = Object.fromEntries(Object.keys(TARGETS).map((key) => [
     key,
-    scorePalette(palette, target.hex),
+    scorePredominant(predominant, key),
   ]));
 
   return {
@@ -36,7 +30,7 @@ function mapResource(resource: any) {
     createdAt: resource.created_at,
     treeType: context.tree_type || 'Tree species not listed',
     neighborhood: context.neighborhood || 'Neighborhood not listed',
-    palette,
+    predominant,
     scores,
   };
 }

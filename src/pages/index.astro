@@ -20,6 +20,7 @@ try {
 }
 
 trees = [...trees].sort((left, right) => (right.scores[initialColor]?.score ?? -1) - (left.scores[initialColor]?.score ?? -1));
+const targetBucketText = (key: ColorKey) => TARGETS[key].buckets.join(' + ');
 const target = TARGETS[initialColor];
 const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME ?? '';
 const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
@@ -108,21 +109,22 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
                   class:list={['target-tab', { selected: initialColor === key }]}
                   type="button"
                   data-target={key}
+                  data-label={TARGETS[key].label.toLowerCase()}
+                  data-buckets={targetBucketText(key)}
                   aria-pressed={initialColor === key ? 'true' : 'false'}
                 >
                   <span class="target-swatch" style={`--swatch: ${TARGETS[key].hex}`} aria-hidden="true"></span>
                   <span>{TARGETS[key].label}</span>
-                  <span class="target-hex">{TARGETS[key].hex}</span>
                 </button>
               ))}
             </div>
 
             <div class="score-note">
               <span class="score-note-mark" aria-hidden="true">i</span>
-              <p>Ranked by the closest hue Cloudinary detects in the photo to <strong>{target.hex}</strong>. Darker shades can still rank close; near-gray tones get a low-confidence adjustment.</p>
+              <p>Ranked by how much of the photo Cloudinary's color analysis labels <strong>{targetBucketText(initialColor)}</strong>.</p>
               <details class="method-details">
                 <summary>Scoring method</summary>
-                <p>Cloudinary returns a palette of detected image colors. We compare each tone’s CIELAB hue angle to the selected target hue and score the closest match from 0–100. Lightness does not reduce the hue score. Very low-chroma colors receive a confidence adjustment because their hue is unreliable. Palette share is shown for context, but does not affect ranking.</p>
+                <p>When a photo is uploaded, Cloudinary's color analysis sorts its pixels into named colors (red, pink, orange, lightblue…) and reports each one's share of the photo. A tree's score is the combined share of the colors that belong to the selected leaderboard, so a photo that is 50% red scores 50. Red also counts pink, since crimson leaves often land in both.</p>
               </details>
             </div>
 
@@ -149,7 +151,6 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
               <div class="tree-grid" id="tree-grid" aria-live="polite">
                 {trees.map((tree, index) => {
                   const score = tree.scores[initialColor];
-                  const closest = score?.closestColor && /^#[\da-f]{6}$/i.test(score.closestColor) ? score.closestColor : '#d5d8c4';
                   return (
                     <article
                       class="tree-entry"
@@ -165,13 +166,20 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
                       <div class="tree-meta">
                         <div class="tree-title-row">
                           <h3>{tree.treeType}</h3>
-                          <span class="tree-score">{score ? `${score.score} pts` : 'Unranked'}</span>
+                          <span class="tree-score">{score ? `${score.score}% ${target.label.toLowerCase()}` : 'Unranked'}</span>
                         </div>
-                        <p class="tree-location">{tree.neighborhood}</p>
-                        <div class="palette-line">
-                          <span class="palette-swatch" style={`--swatch: ${closest}`} aria-hidden="true"></span>
-                          <span>{closest} <span class="palette-label">closest tone · {score ? `${score.closestShare}% of palette` : 'no palette match'}</span></span>
-                        </div>
+                        <p class="tree-location">
+                          {tree.neighborhood}
+                          {tree.createdAt && <> · <time class="tree-time" datetime={tree.createdAt}>{new Date(tree.createdAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' })} UTC</time></>}
+                        </p>
+                        {tree.predominant.length > 0 && (
+                          <div class="color-breakdown">
+                            <div class="color-bar" role="img" aria-label={`Cloudinary detected ${tree.predominant.slice(0, 4).map(([name, share]) => `${Math.round(share)}% ${name}`).join(', ')}`}>
+                              {tree.predominant.map(([name, share]) => <span style={`flex: ${share}; background: ${name}`}></span>)}
+                            </div>
+                            <p class="color-labels">{tree.predominant.slice(0, 3).map(([name, share]) => `${name} ${Math.round(share)}%`).join(' · ')}</p>
+                          </div>
+                        )}
                       </div>
                     </article>
                   );
@@ -193,6 +201,10 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
     <script define:vars={{ cloudName: cloudinaryCloudName, uploadPreset: cloudinaryUploadPreset, galleryTag: GALLERY_TAG }}>
       const targetButtons = [...document.querySelectorAll('[data-target]')];
       const treeGrid = document.getElementById('tree-grid');
+      document.querySelectorAll('.tree-time').forEach((el) => {
+        const date = new Date(el.getAttribute('datetime'));
+        if (!Number.isNaN(date.getTime())) el.textContent = date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+      });
       const scoreNote = document.querySelector('.score-note > p');
       const form = document.getElementById('upload-form');
       const submitButton = document.getElementById('submit-button');
@@ -210,8 +222,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
             tab.setAttribute('aria-pressed', String(selected));
           }
           if (scoreNote) {
-            const hex = button.querySelector('.target-hex')?.textContent;
-            scoreNote.innerHTML = `Ranked by the closest hue Cloudinary detects in the photo to <strong>${hex}</strong>. Darker shades can still rank close; near-gray tones get a low-confidence adjustment.`;
+            scoreNote.innerHTML = `Ranked by how much of the photo Cloudinary's color analysis labels <strong>${button.dataset.buckets}</strong>.`;
           }
           if (treeGrid) {
             const entries = [...treeGrid.querySelectorAll('[data-entry]')];
@@ -222,7 +233,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
               const score = entry.querySelector('.tree-score');
               if (rank) rank.textContent = `#${index + 1}`;
               const value = Number(entry.dataset[key]);
-              if (score) score.textContent = value >= 0 ? `${value} pts` : 'Unranked';
+              if (score) score.textContent = value >= 0 ? `${value}% ${button.dataset.label}` : 'Unranked';
             });
           }
         });
@@ -384,8 +395,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
   .target-tab:last-child { border-right: 0; }
   .target-tab:hover { color: var(--ink); background: var(--green-light); }
   .target-tab.selected { color: var(--ink); background: var(--green-light); box-shadow: inset 0 -3px var(--green); }
-  .target-swatch, .palette-swatch { flex: 0 0 auto; width: 15px; aspect-ratio: 1; border-radius: 50%; background: var(--swatch); border: 1px solid oklch(20% 0.02 140 / 0.18); }
-  .target-hex { color: var(--muted); font-size: 10px; font-weight: 500; }
+  .target-swatch { flex: 0 0 auto; width: 15px; aspect-ratio: 1; border-radius: 50%; background: var(--swatch); border: 1px solid oklch(20% 0.02 140 / 0.18); }
   .score-note { display: flex; align-items: start; gap: 10px; padding: 14px 0 18px; }
   .score-note-mark { width: 17px; height: 17px; flex: 0 0 auto; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--muted); font-family: Georgia, serif; font-size: 11px; }
   .score-note > p { flex: 1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
@@ -405,9 +415,9 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
   .tree-title-row h3 { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4; }
   .tree-score { color: var(--green); font-size: 12px; font-weight: 750; white-space: nowrap; }
   .tree-location { margin: 4px 0 11px; color: var(--muted); font-size: 11px; }
-  .palette-line { display: flex; align-items: center; gap: 7px; color: var(--ink); font-size: 10px; }
-  .palette-swatch { width: 12px; }
-  .palette-label { color: var(--muted); }
+  .color-bar { display: flex; height: 6px; overflow: hidden; border-radius: 3px; background: var(--line); }
+  .color-bar span { min-width: 0; }
+  .color-labels { margin: 6px 0 0; color: var(--muted); font-size: 10px; }
 
   .empty-state { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr); align-items: center; gap: 24px; padding-top: 3px; }
   .empty-image { position: relative; height: 290px; }
@@ -483,7 +493,6 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
     .contribute { padding: 23px 18px 19px; }
     .collection-heading { align-items: start; flex-direction: column; gap: 7px; }
     .target-tab { min-height: 49px; flex-wrap: wrap; gap: 4px 7px; font-size: 11px; }
-    .target-hex { width: 100%; padding-left: 23px; text-align: left; font-size: 9px; }
     .score-note { flex-wrap: wrap; }
     .method-details { margin-left: 27px; }
     .tree-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -491,8 +500,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
     .tree-title-row { align-items: start; flex-direction: column; gap: 3px; }
     .tree-title-row h3 { max-width: 100%; }
     .tree-location { margin-bottom: 8px; }
-    .palette-label { display: none; }
-    .footer { flex-wrap: wrap; padding: 13px 0; }
+      .footer { flex-wrap: wrap; padding: 13px 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }

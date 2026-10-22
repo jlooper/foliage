@@ -1,60 +1,43 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scorePalette, TARGETS } from '../src/lib/rubric.mjs';
+import { parsePredominant, scorePredominant, serializePredominant } from '../src/lib/rubric.mjs';
 
-test('an exact target color receives a perfect score', () => {
-  assert.deepEqual(scorePalette([[TARGETS.orange.hex, 100]], TARGETS.orange.hex), {
-    score: 100,
-    hueDifferenceDegrees: 0,
-    closestColor: TARGETS.orange.hex,
-    closestShare: 100,
-  });
+const burningBush = [['red', 50], ['lightblue', 26], ['pink', 9.8], ['black', 3.2], ['brown', 2.5], ['orange', 2.3]];
+
+test('a target scores the share of the photo in its Cloudinary color buckets', () => {
+  assert.equal(scorePredominant([['orange', 40], ['green', 60]], 'orange').score, 40);
+  assert.equal(scorePredominant([['green', 100]], 'orange').score, 0);
 });
 
-test('a dark red ranks close to pure red because hue matters more than lightness', () => {
-  const score = scorePalette([['#731316', 100]], TARGETS.red.hex);
+test('red also counts pink, since crimson leaves split between the two', () => {
+  const score = scorePredominant(burningBush, 'red');
 
-  assert.ok(score.score >= 85, `expected dark red to score at least 85, got ${score.score}`);
-  assert.equal(score.closestColor, '#731316');
+  assert.equal(score.score, 60);
+  assert.deepEqual(score.matches.map((match) => match.name), ['red', 'pink']);
 });
 
-test('the nearest tone determines score regardless of its palette share', () => {
-  const orangeHeavy = scorePalette([[TARGETS.orange.hex, 90], ['#0000FF', 10]], TARGETS.orange.hex);
-  const orangeTrace = scorePalette([[TARGETS.orange.hex, 1], ['#0000FF', 99]], TARGETS.orange.hex);
+test('a mostly-red photo outranks a photo with a single red leaf', () => {
+  const mostlyRed = scorePredominant([['red', 45], ['green', 55]], 'red').score;
+  const oneLeaf = scorePredominant([['green', 97], ['red', 3]], 'red').score;
 
-  assert.equal(orangeHeavy.score, 100);
-  assert.equal(orangeTrace.score, 100);
-  assert.equal(orangeTrace.closestColor, TARGETS.orange.hex);
-  assert.equal(orangeTrace.closestShare, 1);
+  assert.ok(mostlyRed > oneLeaf);
 });
 
-test('a palette can be compared against each target color', () => {
-  const palette = [['#F5A623', 70], ['#66724B', 30]];
-  const scores = Object.fromEntries(Object.entries(TARGETS).map(([key, target]) => [
-    key,
-    scorePalette(palette, target.hex).score,
-  ]));
-
-  assert.equal(Object.keys(scores).length, 3);
-  assert.ok(scores.orange > scores.red);
-  assert.ok(scores.orange > scores.yellow);
+test('one photo can be scored against every target', () => {
+  assert.equal(scorePredominant(burningBush, 'orange').score, 2);
+  assert.equal(scorePredominant(burningBush, 'yellow').score, 0);
 });
 
-test('invalid or missing palettes return no score', () => {
-  assert.equal(scorePalette([], TARGETS.orange.hex), null);
-  assert.equal(scorePalette([['not-a-color', 100]], TARGETS.orange.hex), null);
+test('missing or unknown data returns no score', () => {
+  assert.equal(scorePredominant([], 'red'), null);
+  assert.equal(scorePredominant(undefined, 'red'), null);
+  assert.equal(scorePredominant(burningBush, 'purple'), null);
 });
 
-test('near-neutral colors have low hue confidence', () => {
-  const score = scorePalette([['#808080', 100]], TARGETS.red.hex);
+test('predominant colors round-trip through context metadata', () => {
+  const stored = serializePredominant(burningBush);
 
-  assert.ok(score.score < 10);
-});
-
-test('orange tones rank clearly below true reds on the red target', () => {
-  const red = scorePalette([['#B22222', 100]], TARGETS.red.hex).score;
-  const orange = scorePalette([[TARGETS.orange.hex, 100]], TARGETS.red.hex).score;
-
-  assert.ok(red >= 85, `expected red to score at least 85, got ${red}`);
-  assert.ok(red - orange >= 20, `expected red to beat orange by 20+, got ${red} vs ${orange}`);
+  assert.equal(stored, 'red:50.0,lightblue:26.0,pink:9.8,black:3.2,brown:2.5,orange:2.3');
+  assert.deepEqual(parsePredominant(stored).map(([name]) => name), burningBush.map(([name]) => name));
+  assert.deepEqual(parsePredominant('garbage,<b>:5,red:x'), []);
 });
