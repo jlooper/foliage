@@ -193,7 +193,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
 
       <footer class="footer">
         <a class="wordmark small" href="/" aria-label="Local Leaf home"><span class="wordmark-mark" aria-hidden="true">🍂</span>Local Leaf</a>
-        <p>Made for looking up, by Jen Looper.</p>
+        <p>Made for looking up, by Jen Looper. <a class="repo-link" href="https://github.com/jlooper/foliage" target="_blank" rel="noopener">View the source on GitHub ↗</a></p>
         <a href="#page-title">Back to top ↑</a>
       </footer>
     </div>
@@ -457,7 +457,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
 
   .footer { min-height: 73px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--line); color: var(--muted); }
   .footer p, .footer > a:last-child { margin: 0; font-size: 11px; }
-  .footer > a:last-child { color: var(--green); text-underline-offset: 3px; }
+  .footer > a:last-child, .repo-link { color: var(--green); text-underline-offset: 3px; }
   .wordmark.small { font-size: 14px; }
   .wordmark.small .wordmark-mark { width: 23px; height: 23px; font-size: 13px; }
 
