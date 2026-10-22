@@ -1,8 +1,12 @@
 export const TARGETS = {
-  orange: { label: 'Orange', hex: '#FF8000' },
-  red: { label: 'Red', hex: '#FF0000' },
-  yellow: { label: 'Yellow', hex: '#FFFF00' },
+  orange: { label: 'Orange', hex: '#FF8000', hueTolerance: 180 },
+  red: { label: 'Red', hex: '#DC143C', hueTolerance: 60 },
+  yellow: { label: 'Yellow', hex: '#FFFF00', hueTolerance: 180 },
 };
+
+// Red sits only ~20° from orange in CIELAB hue, so a wide tolerance lets orange
+// trees score nearly as well as true reds; red gets a narrower one.
+const DEFAULT_HUE_TOLERANCE = 180;
 
 const MIN_CONFIDENT_CHROMA = 12;
 
@@ -39,6 +43,8 @@ function hueDifference(left, right) {
 }
 
 export function scorePalette(palette, targetHex) {
+  const hueTolerance = Object.values(TARGETS).find((entry) => entry.hex.toLowerCase() === String(targetHex).toLowerCase())?.hueTolerance
+    ?? DEFAULT_HUE_TOLERANCE;
   const targetLab = hexToLab(targetHex);
   const target = targetLab && hueAndChroma(targetLab);
   const colors = Array.isArray(palette)
@@ -56,7 +62,7 @@ export function scorePalette(palette, targetHex) {
   const closest = colors.reduce((best, color) => {
     const difference = hueDifference(color.hue, target.hue);
     const chromaConfidence = Math.min(1, color.chroma / MIN_CONFIDENT_CHROMA);
-    const score = Math.round(100 * Math.max(0, 1 - difference / 180) * chromaConfidence);
+    const score = Math.round(100 * Math.max(0, 1 - difference / hueTolerance) * chromaConfidence);
     return !best || score > best.score
       ? { ...color, hueDifference: difference, score }
       : best;

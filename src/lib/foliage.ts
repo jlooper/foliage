@@ -3,6 +3,8 @@ import { scorePalette, TARGETS } from './rubric.mjs';
 
 const GALLERY_TAG = 'local-leaf-gallery';
 const LEGACY_GALLERY_TAG = 'foliage-gallery';
+// Tagged copies outside these folders are stray duplicates; keep them out of the gallery.
+const GALLERY_FOLDERS = ['foliage', 'local-leaf'];
 
 function mapResource(resource: any) {
   const context = resource.context?.custom ?? resource.context ?? {};
@@ -41,7 +43,7 @@ function mapResource(resource: any) {
 
 export async function getFoliageGallery() {
   const result = await cloudinary.search
-    .expression(`resource_type:image AND (tags=${GALLERY_TAG} OR tags=${LEGACY_GALLERY_TAG}) AND moderation_status=approved`)
+    .expression(`resource_type:image AND (tags=${GALLERY_TAG} OR tags=${LEGACY_GALLERY_TAG}) AND (${GALLERY_FOLDERS.map((folder) => `folder:${folder}`).join(' OR ')}) AND moderation_status=approved`)
     .with_field('context')
     .with_field('tags')
     .sort_by('created_at', 'desc')

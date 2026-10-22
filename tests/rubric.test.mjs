@@ -50,3 +50,11 @@ test('near-neutral colors have low hue confidence', () => {
 
   assert.ok(score.score < 10);
 });
+
+test('orange tones rank clearly below true reds on the red target', () => {
+  const red = scorePalette([['#B22222', 100]], TARGETS.red.hex).score;
+  const orange = scorePalette([[TARGETS.orange.hex, 100]], TARGETS.red.hex).score;
+
+  assert.ok(red >= 85, `expected red to score at least 85, got ${red}`);
+  assert.ok(red - orange >= 20, `expected red to beat orange by 20+, got ${red} vs ${orange}`);
+});

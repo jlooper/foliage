@@ -58,11 +58,10 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
             <p class="intro">Share your neighborhood's most beautiful Fall colors. A field guide made together, one neighborhood at a time.</p>
             <div class="story-actions">
               <a class="primary-link" href="#gallery">Explore the collection <span aria-hidden="true">↓</span></a>
-              <span class="edition-mark"><span></span>Autumn field notes</span>
             </div>
             <figure class="opening-image">
               <Image src={landscapeImage} alt="Wellesley College foliage" />
-              <figcaption>Wellesley College, Massachusetts.</figcaption>
+              <figcaption>Wellesley College, Massachusetts</figcaption>
             </figure>
           </div>
 
@@ -347,7 +346,7 @@ const cloudinaryUploadPreset = process.env.CLOUDINARY_UPLOAD_PRESET ?? '';
 
   .topbar { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 28px; border-bottom: 1px solid var(--line); }
   .wordmark { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; font-size: 18px; font-weight: 750; letter-spacing: 0; }
-  .wordmark-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--surface); background: var(--green); font-family: Georgia, serif; font-size: 16px; font-weight: 500; }
+  .wordmark-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; color: var(--green-panel); background: oklch(85% 0.13 88); font-family: Georgia, serif; font-size: 16px; font-weight: 500; }
   .topbar nav { display: flex; align-items: center; gap: 28px; height: 74px; }
   .nav-link { height: 100%; display: inline-flex; align-items: center; text-decoration: none; color: var(--muted); font-size: 13px; border-bottom: 2px solid transparent; }
   .nav-link.active { color: var(--green); border-color: var(--green); font-weight: 650; }
